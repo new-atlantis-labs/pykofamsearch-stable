@@ -11,17 +11,20 @@ from pyhmmer import hmmsearch
 # from pandas import notnull
 
 __program__ = os.path.split(sys.argv[0])[-1]
-__version__ = "2024.6.8"
+__version__ = "2024.7.8"
 
 # Filter 
 def filter_hmmsearch_threshold(
-    hit, 
+    hit,
     threshold:float,
-    score_type:str, 
+    threshold_scale:float,
+    score_type:str,
     return_failed_threshold:bool,
     ):
+    # If threshold is not None
+    if threshold:
+        threshold = round(threshold * threshold_scale, 2)
     # If there is no score_type value then there is no threshold or profile_type values
-
     if not return_failed_threshold:
         if score_type:
             if score_type == "domain":
@@ -68,6 +71,7 @@ def main(args=None):
     parser_hmmsearch = parser.add_argument_group('HMMSearch arguments')
     parser_hmmsearch.add_argument("-e","--evalue", type=float, default=0.1,  help = "E-value threshold [Default: 0.1]")
     parser_hmmsearch.add_argument("-a", "--all_hits", action="store_true", help="Return all hits and do not use curated threshold. Not recommended for large queries.")
+    parser_hmmsearch.add_argument("-t","--threshold_scale", type=float, default=1.0, help = "Multiplier for the curated thresholds. Higher values will make the annotation more strict [Default: 1.0]")
 
     parser_database = parser.add_argument_group('Database arguments')
     parser_database.add_argument("-d", "--database_directory", type=str, help="path/to/kofam_database_directory/ cannot be used with -b/-serialized_database")
@@ -98,6 +102,7 @@ def main(args=None):
         else:
             f = open(opts.serialized_database, "rb")
         ko_to_data, name_to_hmm = pickle.load(f)
+        missing_kos = ko_to_data.keys() - name_to_hmm.keys()
         f.close()
 
     else:
@@ -181,13 +186,13 @@ def main(args=None):
             definition = data["definition"]
             for hit in hits:
                 if hit.included:
-                    result = filter_hmmsearch_threshold(hit, threshold, score_type, return_failed_threshold=False)
+                    result = filter_hmmsearch_threshold(hit, threshold, opts.threshold_scale, score_type, return_failed_threshold=False)
                     if result:
-                        threshold, score, evalue = result
+                        scaled_threshold, score, evalue = result
                         print(
                             hit.name.decode(), 
                             id_ko, 
-                            threshold, 
+                            scaled_threshold, 
                             "{:0.3f}".format(score), 
                             "{:0.5e}".format(evalue), 
                             definition, 
@@ -205,13 +210,13 @@ def main(args=None):
             definition = data["definition"]
             for hit in hits:
                 if hit.included:
-                    result = filter_hmmsearch_threshold(hit, threshold, score_type, return_failed_threshold=True)
-                    threshold, score, evalue = result
-                    threshold = "" if threshold is None else threshold
+                    result = filter_hmmsearch_threshold(hit, threshold, opts.threshold_scale, score_type, return_failed_threshold=True)
+                    scaled_threshold, score, evalue = result
+                    scaled_threshold = "" if scaled_threshold is None else scaled_threshold
                     print(
                         hit.name.decode(), 
                         id_ko, 
-                        threshold, 
+                        scaled_threshold, 
                         "{:0.3f}".format(score), 
                         "{:0.5e}".format(evalue), 
                         definition, 
